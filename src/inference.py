@@ -165,6 +165,7 @@ def test2_independence(df, s, rng):
         "v_per_gap": v_per_gap,
         "gap_threshold": float(gap_threshold),
         "bootstrap_v_ci": bootstrap_v(first, rng),
+        "phi_buy_sell": side_direction_v(first[buy | sell]),
         "by_minute": by_minute,
         "table": {str(k): {str(c): int(x) for c, x in row.items()} for k, row in table.iterrows()},
         "up_share": {"buy": float(p_buy), "sell": float(p_sell), "none": float(up[first["imbalance_buy_sell_flag"] == 0].mean())},
@@ -325,12 +326,18 @@ def test5_hit_rate(s):
     }
 
 
-def holm(results):
-    names = list(results)
-    pvals = [results[k]["primary"]["p"] for k in names]
+def holm(pvalues):
+    names, pvals = list(pvalues), list(pvalues.values())
     reject, adjusted, _, _ = multipletests(pvals, alpha=ALPHA, method="holm")
     return {k: {"p": p, "p_holm": float(a), "reject_holm": bool(r)}
             for k, p, a, r in zip(names, pvals, adjusted, reject)}
+
+
+def day_level_p(results):
+    """Each test's day-level p-value: the primary for Tests 1 and 3, the day-level check for Tests 2, 4 and 5."""
+    return {"T1": results["T1"]["primary"]["p"], "T2": results["T2"]["day_level"]["p"],
+            "T3": results["T3"]["primary"]["p"], "T4": results["T4"]["day_level_log_ratio"]["p"],
+            "T5": results["T5"]["day_level"]["p"]}
 
 
 def run_tests(df):
@@ -347,4 +354,5 @@ def run_tests(df):
     for k in results:
         results[k]["primary"]["reject"] = results[k]["primary"]["p"] < ALPHA
     return {"sdm_bps": sdm, "n_test_rows": int(len(s)), "boundary_second": BOUNDARY,
-            "tests": results, "holm": holm(results)}
+            "tests": results, "holm": holm({k: r["primary"]["p"] for k, r in results.items()}),
+            "holm_day": holm(day_level_p(results))}

@@ -249,6 +249,10 @@ def macros():
     m.update(extension_macros(ext, tests))
     for key, word in zip(["T1", "T2", "T3", "T4", "T5"], ["One", "Two", "Three", "Four", "Five"]):
         m[f"Holm{word}"] = pval(tests["holm"][key]["p_holm"])
+    m["HolmDayAgree"] = count(sum(tests["holm_day"][k]["reject_holm"] == tests["holm"][k]["reject_holm"]
+                                  for k in tests["holm"]))
+    m["HolmDayTwo"] = pval(tests["holm_day"]["T2"]["p_holm"])
+    m["TwoPhi"] = num(tests["tests"]["T2"]["phi_buy_sell"], 3)
     return m
 
 
