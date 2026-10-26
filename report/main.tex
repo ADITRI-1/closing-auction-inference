@@ -1,0 +1,705 @@
+\documentclass[10pt,a4paper,twocolumn]{article}
+
+\newcommand{\projecttitle}{Is the closing-auction imbalance already in the price?
+  Evidence from 5.2 million Nasdaq auction snapshots}
+
+\usepackage{iftex}
+\ifPDFTeX
+  \usepackage[T1]{fontenc}
+  \usepackage[utf8]{inputenc}
+  \IfFileExists{carlito.sty}%
+    {\usepackage[sfdefault]{carlito}}%
+    {\usepackage[scaled=0.92]{helvet}\renewcommand{\familydefault}{\sfdefault}}%
+  \usepackage{courier}
+\else
+  \usepackage[no-math]{fontspec}
+  \setmainfont{Carlito}[Extension=.ttf, UprightFont=*-Regular, BoldFont=*-Bold,
+    ItalicFont=*-Italic, BoldItalicFont=*-BoldItalic]
+\fi
+
+\usepackage[margin=18mm,bottom=20mm,columnsep=7mm]{geometry}
+\usepackage{amsmath}
+\usepackage{xcolor}
+\usepackage{graphicx}
+\usepackage{tabularx}
+\usepackage{array}
+\usepackage{booktabs}
+\usepackage{enumitem}
+\usepackage{titlesec}
+\usepackage{needspace}
+\usepackage[font=small,labelfont=bf]{caption}
+\usepackage[hidelinks]{hyperref}
+\hypersetup{pdftitle={\projecttitle},
+            pdfsubject={CSE558 Data Science, Monsoon 2026: Midterm Project Report}}
+
+\titleformat{\section}{\normalfont\large\bfseries}{\thesection.}{0.5em}{}
+\titlespacing*{\section}{0pt}{12pt}{3pt}
+\titleformat{\subsection}{\normalfont\normalsize\bfseries}{\thesubsection}{0.5em}{}
+\titlespacing*{\subsection}{0pt}{10pt}{2pt}
+\newcommand{\sectionbreak}{\needspace{10\baselineskip}}
+\newcommand{\subsectionbreak}{\needspace{10\baselineskip}}
+
+\setlength{\parindent}{0pt}
+\setlength{\parskip}{4pt}
+\setlist{leftmargin=1.2em, itemsep=2pt, topsep=2pt, parsep=0pt}
+\renewcommand{\arraystretch}{1.25}
+\setlength{\tabcolsep}{4pt}
+\newcolumntype{L}[1]{>{\raggedright\arraybackslash}p{#1}}
+\newcolumntype{Y}{>{\raggedright\arraybackslash}X}
+\newcolumntype{K}[1]{>{\raggedright\arraybackslash\bfseries\boldmath}p{#1}}
+
+\newcommand{\field}[2]{\textbf{#1}~#2\par}
+\newcommand{\tpart}[2]{\par\needspace{12\baselineskip}\smallskip\textbf{#1)~#2}\par}
+\newcommand{\minihead}[1]{\par\needspace{8\baselineskip}\smallskip\textbf{#1}\par}
+\newcommand{\code}[1]{\texttt{#1}}
+
+\graphicspath{{../figures/}}
+\input{../results/numbers.tex}
+
+\begin{document}
+
+\twocolumn[%
+{\small\bfseries CSE558 Data Science\ \ \textbullet\ \ Midterm Project Report\ \ \textbullet\ \ Monsoon 2026\par}
+\vspace{4pt}
+{\LARGE\bfseries\raggedright\projecttitle\par}
+\vspace{6pt}
+\rule{\linewidth}{1pt}
+
+{\small
+\begin{tabularx}{\linewidth}{@{}K{2.4cm} Y@{}}
+\toprule
+Group name & Closing Cross \\
+Dataset & kaggle.com/competitions/optiver-trading-at-the-close (file \code{train.csv}) \\
+Code & github.com/ADITRI-1/closing-auction-inference (code and README) \\
+\bottomrule
+\end{tabularx}}
+
+\vspace{2pt}
+{\small
+\begin{tabularx}{\linewidth}{@{}L{0.5cm} L{3.4cm} L{2.3cm} L{4.8cm} Y@{}}
+\toprule
+\textbf{\#} & \textbf{Name} & \textbf{Roll no.} & \textbf{Institute email} & \textbf{Contribution} \\
+\midrule
+1 & Arush Gumber & 2023136 & arush23136@iiitd.ac.in & Problem statement, Tests 3 to 5, code (4, 5) \\
+2 & Aditri Jain & 2024027 & aditri24027@iiitd.ac.in & Dataset and size check (1) \\
+3 & Arnesh Batra & 2023129 & arnesh23129@iiitd.ac.in & Preparation, before and after (2, 3) \\
+4 & Anika Goyal & 2024072 & anika24072@iiitd.ac.in & EDA, Tests 1 and 2 (4, 5) \\
+5 & Akshainie Rawat & 2024054 & akshainie24054@iiitd.ac.in & Limitations, README, report (5, 6) \\
+\bottomrule
+\end{tabularx}}
+\vspace{12pt}
+]
+
+\section{Dataset}
+
+\field{Source:}{Optiver, ``Trading at the Close'', a Kaggle competition released in 2023. It records the last ten
+minutes of the Nasdaq closing auction, the call auction that sets each stock's official closing price at 16:00, for
+\nStocks{} stocks over \nDays{} trading days. One row is one stock at one 10-second snapshot between 15:50 and
+15:59.}
+
+\field{What is raw about it:}{the indicative clearing prices are missing for half the rows by exchange rule; four
+stock-days carry no book at all; far prices reach hundreds of times the reference price; \nStocksWithGaps{} stocks
+leave and re-enter the panel; the response is a 60-second move sampled every 10 seconds, so consecutive rows share
+most of their window; and the index that the response is measured against is hidden.}
+
+{\small
+\begin{tabularx}{\linewidth}{@{}L{3.0cm} Y Y@{}}
+\toprule
+ & \textbf{Raw file} & \textbf{After encoding} \\
+\midrule
+Instances (rows) & \nRawRows & \nCleanRows \\
+Attributes (columns) & \nRawCols & \nEncCols \\
+Instances $\times$ attributes & \nRawCells & \nEncCells \\
+\bottomrule
+\end{tabularx}}
+
+\field{Size check:}{the raw file alone gives $\nRawRows\times\nRawCols=\nRawCells\ge3{,}000{,}000$. After
+cleaning we keep \nEncNumeric{} numeric columns, add \nEncEngineered{} engineered ones and one-hot encode the stock
+(200 levels), the imbalance side (3) and the auction phase (2), which gives
+$\nCleanRows\times\nEncCols=\nEncCells$.}
+
+\minihead{Key features}
+{\footnotesize
+\begin{tabularx}{\linewidth}{@{}L{3.3cm} L{1.3cm} Y@{}}
+\toprule
+\textbf{Feature} & \textbf{Type} & \textbf{Real-world meaning} \\
+\midrule
+\code{target} & continuous & the stock's 60\,s return minus the index's 60\,s return, in basis points (1 bp $=0.01\%$); our response \\
+\code{imbalance\_size} & continuous & shares that would be left unmatched if the auction cleared now \\
+\code{imbalance\_buy\_}\allowbreak\code{sell\_flag} & nominal & side of that imbalance: buy, sell or none \\
+\code{matched\_size} & continuous & shares that would trade at the current reference price \\
+\code{reference\_price} & continuous & the price at which the auction would clear now \\
+\code{near/far\_price} & continuous & indicative clearing prices with and without the continuous book; published from 15:55 \\
+\code{bid/ask\_price} & continuous & best quotes in the continuous market \\
+\code{seconds\_in\_bucket} & discrete & seconds since 15:50 (0 to 540) \\
+\code{signed\_imbalance} & engineered & side $\times$ imbalance\,/\,matched shares: $+0.3$ means buyers want 30\% more
+shares than are matched, $-0.3$ the same for sellers \\
+\bottomrule
+\end{tabularx}}
+
+\section{Data preparation}
+
+Every step below was fixed before any hypothesis test was run, and each records its row counts.
+
+{\footnotesize
+\begin{tabularx}{\linewidth}{@{}L{1.9cm} L{2.2cm} Y@{}}
+\toprule
+\textbf{Issue found} & \textbf{What we did} & \textbf{Why, and not the alternative} \\
+\midrule
+\nEmptyRows{} rows (4 stock-days) with no book at all
+ & dropped
+ & no market existed for that stock that day; \nEmptyNoTarget{} of these rows also lack the target, so imputing would
+   invent both \\
+Near and far price missing in \nStructuralRows{} rows before 15:55
+ & kept missing; added a phase flag
+ & the exchange publishes them only from 15:55. Imputing would hand the analysis information no trader had \\
+Far prices hundreds of times the reference
+ & \nFarOutliers{} values beyond 10 sd set to missing
+ & Tukey and MAD fences flag a quarter of all far prices (Figure~\ref{fig:fences}), because the far price spreads out
+   as the imbalance grows: that is economics, not error. Chebyshev guarantees a 10 sd fence flags at most 1\% under
+   any distribution \\
+Far price missing in \nFarPostMissing{} rows after 15:55
+ & kept missing
+ & it needs auction-only interest on both sides; no test uses it \\
+Target with excess kurtosis \nTargetKurt{}
+ & winsorised copy at 0.1\% and 99.9\% ($\nWinsorLow$ and \nWinsorHigh{} bps); raw kept
+ & extreme moves are real in an auction, so no row is deleted. Mean-based tests use the clipped copy and report the
+   raw result beside it \\
+60\,s targets sampled every 10\,s
+ & tests use one snapshot per minute
+ & neighbouring targets share up to 50 of their 60 seconds (Figure~\ref{fig:acf}); every row would inflate the sample
+   about sixfold \\
+Hidden index behind the target
+ & recovered by least squares
+ & the implied index return is the same for every stock at a timestamp (median spread \nIndexResidSd{} bps), and 200
+   positive weights summing to \nIndexWeightSum{} reproduce it with unexplained variance \nIndexUnexplained. The
+   response is what it claims to be \\
+Sizes and prices not comparable across stocks
+ & engineered signed imbalance, spread and near/far gaps in bps
+ & a 1M-share imbalance is large for a small stock and noise for a large one \\
+Side coded $-1,0,1$; 200 stock ids
+ & one-hot encoded
+ & an integer code would make ``sell $<$ none $<$ buy'' a magnitude \\
+Duplicate keys
+ & checked on (stock, day, second)
+ & none found \\
+\bottomrule
+\end{tabularx}}
+
+\begin{figure}[!t]
+  \includegraphics[width=\linewidth]{fig_outlier_fences}
+  \caption{Quartile-based fences would discard a quarter of all far prices. The Chebyshev fence removes only
+  physically impossible values. Bars show the share of far prices each rule calls an outlier.}
+  \label{fig:fences}
+\end{figure}
+
+\minihead{Processing at stream scale}
+A summary that is updated row by row, without storing the data, is how a live auction feed would be monitored. We
+streamed all \nCleanRows{} rows through a Count-Min sketch of $\nCmDepth\times\nCmWidth$ counters
+($\varepsilon=0.001$, $\delta=0.01$) to total the imbalance shares of each of the \nCmItems{} stock-days. The sketch
+uses \nCmMemory{} of the memory of exact counting. Every estimate stayed within the $\varepsilon N$ guarantee, the
+worst at \nCmMaxShare{} of it, and \nCmTop{} of the 10 heaviest stock-days were found.
+
+\section{What changed after preparation}
+
+{\footnotesize
+\begin{tabularx}{\linewidth}{@{}L{3.1cm} L{1.6cm} Y@{}}
+\toprule
+\textbf{Measure} & \textbf{Before} & \textbf{After} \\
+\midrule
+Rows & \nRawRows & \nCleanRows \\
+Stock-days present (of 96{,}200) & \nStockDaysBefore & \nStockDaysPresent \\
+Missing cells & \nMissingBefore & \nMissingAfter{} (\nStructuralCells{} by exchange rule) \\
+Impossible far prices & \nFarOutliers & 0 \\
+Memory & \nMemBefore{} MB & \nMemAfter{} MB \\
+Rows used per test & every snapshot & \nTestRows{} (one per minute) \\
+\bottomrule
+\end{tabularx}}
+
+Cleaning removed almost no data: only \nEmptyRows{} rows went. What changed is the unit of analysis. The
+autocorrelation of the target follows the overlap of its windows and vanishes at exactly one minute
+(Figure~\ref{fig:acf}), so the honest sample is one snapshot per minute. Across days, \nStockDaysMissing{} stock-days
+are absent; one stock is missing for \nMaxMissingDays{} days, so every comparison is made within a day.
+
+\begin{figure}[!t]
+  \includegraphics[width=\linewidth]{fig_autocorrelation}
+  \caption{Consecutive targets are correlated only because their windows overlap. Bars are the correlation between a
+  target and the one $k$ seconds later; black ticks are the share of the 60\,s window the two have in common. Both
+  reach zero at 60\,s, so tests use one snapshot per minute.}
+  \label{fig:acf}
+\end{figure}
+
+\section{Basic questions and problem statement}
+
+\minihead{Basic questions}
+\begin{enumerate}[label=\arabic*.]
+  \item \textbf{How lopsided are auctions?} Sell imbalances appear in \nFlagSell{} of snapshots, buy in \nFlagBuy{},
+  and \nFlagNone{} are balanced.
+  \item \textbf{How costly is trading near the close?} The median quoted spread is \nSpreadMedian{} bps, and it
+  narrows as 16:00 approaches (Figure~\ref{fig:profile}).
+  \item \textbf{Is the target normal?} No (Figure~\ref{fig:dist}). Moves beyond 3 sd occur in \nTailObserved{} of
+  rows, \nTailRatio{} times the normal \nTailNormal{} but inside Chebyshev's limit of \nTailCheb. A Student $t$ fitted
+  by maximum likelihood has only \nTFitDf{} degrees of freedom: the variance exists, so the CLT and Chebyshev apply,
+  but the fourth moment does not. It cuts the $\chi^2$ goodness-of-fit statistic from \nNormChi{} (normal) to
+  \nTFitChi{}, yet is still rejected at this sample size.
+  \item \textbf{Do imbalances change side at random?} No. A stock flips side \nFlipMean{} times a day on average, but
+  the variance is \nFlipDispersion{} times the mean, and \nFlipZero{} of stock-days never flip against \nFlipZeroPoisson{}
+  under a Poisson; $\chi^2=\nFlipChi$ on \nFlipDf{} d.f. Some auctions are one-sided all along, others churn.
+\end{enumerate}
+
+\begin{figure}[!t]
+  \includegraphics[width=\linewidth]{fig_target_distribution}
+  \caption{The target is far more peaked and heavy-tailed than a normal. Left: histogram on a log scale, with the
+  normal of the same mean and spread in orange; the bars sit far above it in both tails. Right: Q-Q plot; normal data
+  would lie on the line. So tests average to one value per day and rely on the CLT across days.}
+  \label{fig:dist}
+\end{figure}
+
+\begin{figure}[!t]
+  \includegraphics[width=\linewidth]{fig_auction_profile}
+  \caption{The auction changes regime at 15:55. Each line is an average over all stocks and days at each 10\,s
+  snapshot. Top: size of the next-minute move. Middle: bid-ask spread. Bottom: imbalance as a share of matched shares.
+  The imbalance collapses at 15:55; the largest moves come from windows that contain 15:55.}
+  \label{fig:profile}
+\end{figure}
+
+Figure~\ref{fig:profile} points to 15:55. At that moment Nasdaq starts publishing the near and far indicative prices,
+and it stops accepting new market-on-close orders. Balanced auctions rise from \nBalancedPre{} to \nBalancedPost{} of
+stocks within ten seconds.
+
+\minihead{Our problem statements}
+\noindent\fbox{\begin{minipage}{\dimexpr\linewidth-2\fboxsep-2\fboxrule\relax}
+\textbf{P1 (primary).} Does the published imbalance predict the stock's next-minute move against the index, and
+is that edge larger than the half-spread a trader pays to act on it?
+
+\smallskip
+\textbf{P2.} Does the 15:55 rule change make the next minute more predictable from the imbalance, and less
+volatile?
+\end{minipage}}
+
+\field{How they are novel:}{the basic questions read one column at a time. Ours ask whether public information is
+already in the price, which needs an engineered signal, a day-level unit that respects shared index moves, and an
+economic yardstick (the spread). P2 compares the same stocks on the same day before and after a rule change. The
+public work on this dataset that we found fits predictive models; it does not test pricing, account for the overlap
+or use the 15:55 boundary.}
+
+\begin{figure}[!t]
+  \includegraphics[width=\linewidth]{fig_decile_response}
+  \caption{After 15:55 the imbalance sorts the next minute; before, it barely does. Every minute snapshot is ranked
+  by signed imbalance and cut into ten equal groups, from the most sell-heavy (1) to the most buy-heavy (10). Each
+  point is the group's mean move against the index. A fully priced imbalance would give a flat line at zero. Bands
+  are 95\% intervals over days.}
+  \label{fig:decile}
+\end{figure}
+
+\section{Statistical inferences}
+
+\field{Rows tested:}{the \nTestRows{} snapshots at whole minutes (0, 60, \dots, 540\,s), so no two targets of a stock
+overlap. Pre-15:55 rows are those at 0 to 240\,s, whose windows end by 15:55; post rows are those at 300 to 540\,s.
+Tests 1 and 3 average to one value per trading day ($n=\nDays$), because stocks on the same day share market
+conditions. Tests 2, 4 and 5 use the syllabus test for their question ($\chi^2$, F, one-proportion z) on rows. The
+target is measured against the index, which removes the largest move all stocks share, but rows from one day are
+still not fully independent, so these p-values may overstate the evidence. Each is paired with a day-level check in
+its result, and every decision and verdict below holds at the day level.}
+
+\field{Smallest difference that matters (SDM):}{the median quoted half-spread, \nSdm{} bps. Acting on the imbalance
+means crossing at least half the spread to get in, and any real exit costs more. So the half-spread is the minimum
+cost of trading the signal, which is generous to the edge: an edge below it cannot be traded. Each test states its own threshold; all were fixed before testing.}
+
+\field{Reading a result:}{an effect \emph{matters} when its whole 95\% interval lies beyond the threshold, and
+\emph{does not matter} when the whole interval lies inside it. We use $\alpha=0.05$ per test and report Holm-adjusted
+p-values across the five.}
+
+\subsection*{Test 1 (P1): does the imbalance side predict the move?}
+
+\tpart{a}{Hypotheses, written before running the test}
+{\small
+\begin{tabularx}{\linewidth}{@{}K{3.4cm} Y@{}}
+\toprule
+$H_0$ & $\mu\le0$ \\
+$H_1$ & $\mu>0$ \\
+Significance level & $\alpha=0.05$ \\
+Side & one-sided (right) \\
+Test & one-sample t-test on day means \\
+Smallest difference that matters & \nSdm{} bps (the SDM) \\
+\bottomrule
+\end{tabularx}}
+
+$\mu$ is the expected edge per trade, $E[\text{side}\times\text{target}]$, for a trader who buys on a buy imbalance
+and sells on a sell imbalance. Each day gives one mean over its flagged snapshots. One-sided, because an efficient
+market predicts zero and liquidity demand predicts a positive edge. The interval is two-sided because the verdict
+needs its upper end.
+
+\tpart{b}{Other tests we considered}
+Day means are independent across days and, by the CLT, close to normal at $n=\nDays$ even though rows are
+heavy-tailed; $\sigma$ is unknown, so a one-sample t-test fits.\par
+{\footnotesize
+\begin{tabularx}{\linewidth}{@{}L{2.4cm} Y@{}}
+\toprule
+\textbf{Also considered} & \textbf{Why we did not use it} \\
+\midrule
+z-test on all rows & treats \nOneNaiveN{} rows as independent, although rows from one day are not; it gives
+$z=\nOneNaiveZ$, overstating the evidence. The \nOneOverlapN{} overlapping rows would be worse still \\
+Welch t, buy vs sell rows & same question ($t=\nOneWelchT$, gap \nOneWelchDiff{} bps) with the same row dependence;
+a Brown-Forsythe test (variance ratio \nOneVarRatio, p = \nOneBfP) finds the spreads differ, so Welch and not pooled;
+the pooled t is \nOnePooledT{} anyway \\
+Bootstrap over days & no normality needed; outside the syllabus, so a check: \nOneBootCi{} bps, same as the t interval \\
+Permutation within snapshots & shuffles sides across stocks at each snapshot, \nPermOneN{} times; no shuffle came near
+the observed edge (largest \nPermOneMax{} bps), p = \nPermOneP \\
+\bottomrule
+\end{tabularx}}
+
+\tpart{c}{Result}
+{\small
+\begin{tabularx}{\linewidth}{@{}K{3.4cm} Y@{}}
+\toprule
+Estimate & $+\nOneEst$ bps per trade (raw target: $+\nOneRawEst$) \\
+95\% confidence interval & \nOneCi{} bps \\
+Test statistic (d.f.) & $t=\nOneT$ (\nOneDf) \\
+p-value (Holm) & \nOneP{} (\nHolmOne) \\
+Decision & reject $H_0$ \\
+\bottomrule
+\end{tabularx}}
+
+The imbalance side predicts the next minute, on \nOnePositiveDays{} of \nDays{} days. The edge does not matter: even
+the top of its interval is \nOneShareOfSdm{} of the half-spread, so the information is in the price to within trading
+costs.
+
+\subsection*{Test 2 (P1): is the direction of the move independent of the side?}
+
+\tpart{a}{Hypotheses, written before running the test}
+{\small
+\begin{tabularx}{\linewidth}{@{}K{3.4cm} Y@{}}
+\toprule
+$H_0$ & side and direction are independent \\
+$H_1$ & they are dependent \\
+Significance level & $\alpha=0.05$ \\
+Side & non-directional ($\chi^2$ uses its upper tail; the direction is read from the up-shares) \\
+Test & $\chi^2$ test of independence, $3\times2$ table \\
+Smallest difference that matters & Cramér's $V=\nTwoVThreshold$ \\
+\bottomrule
+\end{tabularx}}
+
+Test 1 asks about the size of the move; Test 2 asks only about its sign, which is robust to the heavy tails. We use
+the first snapshot of each stock-day, at 15:50, fixed in advance: it is the first imbalance a trader sees, and each
+stock appears once per day (\nTwoN{} rows; \nTwoZeroRows{} snapshots with no move, neither up nor down, are left
+out). $V=0.10$ is the conventional floor for a small association. Buy and sell imbalances, and up and down moves, are
+each close to half here, so $V$ for buy against sell equals the gap in up-share: $V=0.10$ is a gap of
+\nTwoGapThreshold{} percentage points.
+
+\tpart{b}{Other tests we considered}
+Side (3 levels) and direction (2) are both categorical, the data are counts, and every expected count is far above 5
+(smallest \nTwoMinExpected), so a $\chi^2$ test of independence fits.\par
+{\footnotesize
+\begin{tabularx}{\linewidth}{@{}L{2.4cm} Y@{}}
+\toprule
+\textbf{Also considered} & \textbf{Why we did not use it} \\
+\midrule
+Two-proportion z-test & drops the balanced rows; on buy vs sell it gives $z=\nTwoPropZ$ and an up-share gap of
+\nTwoDiff{} points (95\% CI \nTwoDiffCi) \\
+G-test & same large-sample limit; $G=\nTwoG$, same decision \\
+$\chi^2$ on all \nTwoAllN{} minute rows & repeats each stock nine more times a day, so rows are not independent;
+$\chi^2=\nTwoAllChi$ \\
+Bootstrap over days & resamples whole days (outside the syllabus, as in Test 1); 95\% interval for $V$ \nTwoVCi, a
+check on the interval below \\
+$\chi^2$ at every minute & exploratory, run after the main test, so only described: $V$ is below 0.10 at
+\nTwoVBelow{} of \nTwoMinutes{} minutes (largest \nTwoVOtherMax) but \nTwoVLast{} at 15:59, whose window contains the
+16:00 closing cross \\
+\bottomrule
+\end{tabularx}}
+
+\tpart{c}{Result}
+{\small
+\begin{tabularx}{\linewidth}{@{}K{3.4cm} Y@{}}
+\toprule
+Estimate & $V=\nTwoV$; up-share \nTwoUpBuy{} after buy, \nTwoUpNone{} after balanced, \nTwoUpSell{} after sell
+(gap \nTwoGap{} points) \\
+95\% confidence interval & gap \nTwoGapCi{} points (t over days) \\
+Test statistic (d.f.) & $\chi^2=\nTwoChi$ (\nTwoDf) \\
+p-value (Holm) & \nTwoP{} (\nHolmTwo) \\
+Day-level check & $t=\nTwoDayT$ (\nTwoDayDf), p = \nTwoDayP; same decision \\
+Decision & reject $H_0$ \\
+\bottomrule
+\end{tabularx}}
+
+At 15:50 the side and the direction are dependent, in the order P1 predicts (buy, then balanced, then sell), but
+weakly: the whole interval for the gap lies below \nTwoGapThreshold{} points, so the association does not matter. Only
+in the last minute does it reach a size that matters (gap \nTwoGapLast{} points, 95\% CI \nTwoGapLastCi), an
+exploratory finding that agrees with the placebo test below.
+
+\subsection*{Test 3 (P2): does 15:55 change how predictable the move is?}
+
+\tpart{a}{Hypotheses, written before running the test}
+{\small
+\begin{tabularx}{\linewidth}{@{}K{3.4cm} Y@{}}
+\toprule
+$H_0$ & $\mu_\Delta=0$ \\
+$H_1$ & $\mu_\Delta\neq0$ \\
+Significance level & $\alpha=0.05$ \\
+Side & two-sided \\
+Test & paired t-test over days \\
+Smallest difference that matters & $|\Delta\text{IC}|=\nThreeThreshold$ \\
+\bottomrule
+\end{tabularx}}
+
+The information coefficient (IC) is the rank correlation, across stocks, between signed imbalance and the next move:
+0 means no predictive power, 1 a perfect ranking. Each day gives an IC before and after 15:55, each pooling that
+phase's five minute snapshots, and $\Delta_d$ is post minus pre. Two-sided, because the near price could absorb the
+imbalance information or sharpen it. A change of 0.02 is about two-thirds of the IC before 15:55 (\nThreePre); a
+smaller change leaves the signal about as useful as it was.
+
+\tpart{b}{Other tests we considered}
+The two ICs of a day come from the same stocks in the same market, so they are paired; the paired t-test removes the
+day effect. The \nDays{} daily differences are close to normal (skew $\nThreeSkew$, excess kurtosis $\nThreeKurt$), so
+the t-test's assumption holds.\par
+{\footnotesize
+\begin{tabularx}{\linewidth}{@{}L{2.4cm} Y@{}}
+\toprule
+\textbf{Also considered} & \textbf{Why we did not use it} \\
+\midrule
+Fisher z on two pooled correlations & assumes two independent samples, but they share stocks and days; gives
+$z=\nThreeFisherZ$ \\
+t-test for each correlation & tests each phase against zero, not the change; pre $r=\nThreePooledPre$
+($t=\nThreePooledPreT$), post $r=\nThreePooledPost$ ($t=\nThreePooledPostT$) \\
+Sign test over days & distribution-free; \nThreeSignDays{} of \nDays{} days rise, p = \nThreeSignP \\
+Sign-flip permutation & randomly swaps each day's pre and post, \nFlipThreeN{} times; largest \nFlipThreeMax, p =
+\nFlipThreeP \\
+Wilcoxon signed-rank & needs no normality; p = \nThreeWilcoxonP, same decision \\
+IC per snapshot & averages one IC per 10\,s snapshot instead of pooling a phase's five: gain \nThreePerSnapshot;
+removing each snapshot's mean first gives \nThreeCentred; same decision \\
+\bottomrule
+\end{tabularx}}
+
+\tpart{c}{Result}
+{\small
+\begin{tabularx}{\linewidth}{@{}K{3.4cm} Y@{}}
+\toprule
+Estimate & $\Delta\text{IC}=+\nThreeEst$ (IC \nThreePre{} before, \nThreePost{} after) \\
+95\% confidence interval & \nThreeCi \\
+Test statistic (d.f.) & $t=\nThreeT$ (\nThreeDf) \\
+p-value (Holm) & \nThreeP{} (\nHolmThree) \\
+Decision & reject $H_0$ \\
+\bottomrule
+\end{tabularx}}
+
+The imbalance predicts the next minute \nThreeRatio{} times better after 15:55, and the whole interval lies beyond
+the threshold, so the change matters. We had predicted, in writing, a fall. The placebo test below shows where the rise really comes from.
+
+\subsection*{Test 4 (P2): is the next minute less volatile after 15:55?}
+
+\tpart{a}{Hypotheses, written before running the test}
+{\small
+\begin{tabularx}{\linewidth}{@{}K{3.4cm} Y@{}}
+\toprule
+$H_0$ & $\sigma^2_{\text{post}}/\sigma^2_{\text{pre}}=1$ \\
+$H_1$ & $\sigma^2_{\text{post}}/\sigma^2_{\text{pre}}\neq1$ \\
+Significance level & $\alpha=0.05$ \\
+Side & two-sided \\
+Test & F-test for two variances \\
+Smallest difference that matters & ratio outside \nFourLow{} to \nFourHigh{} \\
+\bottomrule
+\end{tabularx}}
+
+A 10\% change in variance is about a 5\% change in volatility (standard deviation); we fixed it in advance as the
+smallest change worth reporting.
+
+\tpart{b}{Other tests we considered}
+Two groups of a continuous variable and a question about spread call for the F-test for two variances, the syllabus
+test. Its assumptions fail here: the target has excess kurtosis of \nFourKurtPre{} before and \nFourKurtPost{} after
+15:55, and rows from one day are not independent, so its interval is too narrow. The verdict therefore uses the
+day-level ratio in the result, which takes one value per day and needs no normal rows.\par
+{\footnotesize
+\begin{tabularx}{\linewidth}{@{}L{2.4cm} Y@{}}
+\toprule
+\textbf{Also considered} & \textbf{Why we did not use it as primary} \\
+\midrule
+Brown-Forsythe & robust to heavy tails, but the same row dependence; $W=\nFourBf$, p \nFourBfP, same decision \\
+Clipped target & $F=\nFourWinsF$, day-level ratio \nFourDayClipped; same decision \\
+Windows with an announcement & exploratory: 15:50 (first imbalance), 15:54 and 15:55 (near price appears) and 15:59
+(closing cross) are the most volatile. Removing the two that touch 15:55 gives a ratio of \nFourNoBoundary{}
+(\nFourNoBoundaryCi); the quiet minutes alone (15:51--15:53 against 15:56--15:58) give \nFourQuiet{} (\nFourQuietCi).
+Both matter \\
+$\chi^2$ for one variance & needs a known $\sigma_0$; we compare two unknown variances \\
+\bottomrule
+\end{tabularx}}
+
+\tpart{c}{Result}
+{\small
+\begin{tabularx}{\linewidth}{@{}K{3.4cm} Y@{}}
+\toprule
+Estimate & $F=\nFourF$ (sd \nFourSdPre{} to \nFourSdPost{} bps) \\
+95\% confidence interval & \nFourCi{} (F-test; too narrow, see b) \\
+Test statistic (d.f.) & $F=\nFourF$ (\nFourDf, \nFourDf) \\
+p-value (Holm) & \nFourP{} (\nHolmFour) \\
+Day-level check & ratio \nFourDayRatio{} (95\% CI \nFourDayRatioCi), $t=\nFourDayT$, p = \nFourDayP; lower on
+\nFourDayLower{} of \nDays{} days \\
+Decision & reject $H_0$ \\
+\bottomrule
+\end{tabularx}}
+
+After 15:55 the variance of the next minute is about \nFourDrop{} lower (standard deviation \nFourSdDrop{} lower), or
+about \nFourQuietDrop{} lower using only minutes without an announcement. The change matters: the whole day-level
+interval lies below \nFourLow, as it does in every comparison that treats both sides alike, and the F-test,
+Brown-Forsythe and day-level ratio all agree.
+
+\subsection*{Test 5 (P1): can an outsider trade the imbalance?}
+
+\tpart{a}{Hypotheses, written before running the test}
+{\small
+\begin{tabularx}{\linewidth}{@{}K{3.4cm} Y@{}}
+\toprule
+$H_0$ & $p\le0.5$ \\
+$H_1$ & $p>0.5$ \\
+Significance level & $\alpha=0.05$ \\
+Side & one-sided (right) \\
+Test & one-proportion z-test \\
+Smallest difference that matters & $p=\nFiveThreshold$ \\
+\bottomrule
+\end{tabularx}}
+
+$p$ is the chance that a trade in the imbalance direction earns more than its own half-spread. Test 1 compares the
+average edge with a typical cost; Test 5 charges each trade its own half-spread (\nFiveHalfSpread{} bps on average)
+and counts wins, so frequent small losses cannot hide behind a few large gains. The half-spread is the minimum cost
+(see the SDM), so real results would be worse. A rule that wins 52\% of the time is a two-point edge over even odds,
+fixed in advance.
+
+\tpart{b}{Other tests we considered}
+Each trade either wins or loses, so the number of wins is binomial; with \nFiveN{} trades the normal approximation
+is very accurate, so a one-proportion z-test fits.\par
+{\footnotesize
+\begin{tabularx}{\linewidth}{@{}L{2.4cm} Y@{}}
+\toprule
+\textbf{Also considered} & \textbf{Why we did not use it} \\
+\midrule
+Exact binomial & identical at $n=\nFiveN$; same decision \\
+Mean net P\&L over days & a hit rate alone cannot show a loss, so we check it: $\nFiveNetDay$ bps per trade (95\% CI
+\nFiveNetDayCi), above zero on \nFiveNetPositiveDays{} of \nDays{} days. Losing trades lose \nFiveLoss{} bps on
+average and winners gain \nFiveWin, so breaking even would need about \nFiveBreakeven{} wins \\
+Random side & the same trades and costs with the side set by a coin win \nFiveRandom; the imbalance adds \nFiveLift{}
+points (\nFiveLiftCi{} over days): real, as in Tests 1 and 2, but far from 50\% \\
+\bottomrule
+\end{tabularx}}
+
+\tpart{c}{Result}
+{\small
+\begin{tabularx}{\linewidth}{@{}K{3.4cm} Y@{}}
+\toprule
+Estimate & $\hat p=\nFiveEst$ (\nFiveGross{} before costs) \\
+95\% confidence interval & \nFiveCi{}\% \\
+Test statistic & $z=\nFiveZ$ (normal, no d.f.) \\
+p-value (Holm) & \nFiveP{} (\nHolmFive) \\
+Day-level check & daily hit rate \nFiveDayEst{} (95\% CI \nFiveDayCi\%), $t=\nFiveDayT$ (\nFiveDayDf); same decision \\
+Decision & fail to reject $H_0$ \\
+\bottomrule
+\end{tabularx}}
+
+Before costs the rule wins slightly more than half the time; after paying the half-spread it wins only \nFiveEst.
+The whole interval lies far below \nFiveThreshold, so the rule does not matter as a trade, and the average trade nets
+$\nFiveNetDay$ bps.
+
+\subsection*{Stress tests, with criteria fixed before they ran}
+
+\minihead{Is 15:55 really the cause? Placebo boundaries}
+If the rule change drives Test 3, the IC should jump at 15:55 and nowhere else. We computed the jump at each of the
+nine minute boundaries, as a paired t over days. The jump at 15:55 is real, $+\nJumpReal$ (95\% CI \nJumpRealCi), but
+it is not the largest: the jump into the last minute is $+\nJumpLast$ (\nJumpLastCi). Our pre-set criterion fails.
+
+\begin{figure}[!t]
+  \includegraphics[width=\linewidth]{fig_ic_profile}
+  \caption{Predictability is not a step at 15:55: it spikes for one snapshot at 15:55, fades, turns negative near
+  15:57, and peaks in the last minute, whose window contains the 16:00 closing cross. Each point is the IC across
+  stocks at one 10\,s snapshot, averaged over days, with a 95\% band.}
+  \label{fig:icprofile}
+\end{figure}
+
+Figure~\ref{fig:icprofile} shows why. The IC leaps from $\nIcBeforeBoundary$ to \nIcAtBoundary{} in the ten seconds
+across 15:55, then fades to $\nIcMin$ near 15:57, and reaches \nIcLast{} for the last minute. Dropping that last
+minute shrinks the post-minus-pre gain from \nSensWith{} (\nSensWithCi) to \nSensWithout{} (\nSensWithoutCi). That
+interval straddles our 0.02 threshold, so without the last minute the change is inconclusive. The honest reading of Test 3: publishing the near price causes a brief spike, and the lasting gain is
+the imbalance telling us about the closing print itself. This decomposition was found after the placebo result, so we
+label it exploratory.
+
+\minihead{Does the effect hold everywhere? Subgroups}
+The $\Delta$IC of Test 3 is positive, with its whole interval above zero, in all \nRobPositive{} of \nRobTotal{}
+subgroups we fixed in advance. It is largest for big and tightly quoted stocks.
+
+{\footnotesize
+\begin{tabularx}{\linewidth}{@{}L{2.6cm} L{0.9cm} L{0.9cm} Y@{}}
+\toprule
+\textbf{Subgroup} & \textbf{IC pre} & \textbf{IC post} & \textbf{$\Delta$IC (95\% CI)} \\
+\midrule
+\nRobRows
+\bottomrule
+\end{tabularx}}
+
+\minihead{Could we have missed an effect? Power}
+At 80\% power and our $\alpha$, the smallest effects the day-level tests could detect are at most half of every threshold,
+so no ``does not matter'' verdict is a lack of data.
+
+{\footnotesize
+\begin{tabularx}{\linewidth}{@{}L{1.0cm} L{2.4cm} L{1.4cm} Y@{}}
+\toprule
+\textbf{Test} & \textbf{Detectable effect} & \textbf{Threshold} & \textbf{Days needed at threshold} \\
+\midrule
+T1 & \nMdeOne{} bps & \nThrOne{} bps & \nDaysOne \\
+T2 & \nMdeTwo{} up-share gap & \nThrTwo & \nDaysTwo \\
+T3 & \nMdeThree{} IC & \nThrThree{} IC & \nDaysThree \\
+T4 & \nMdeFour{} log ratio & \nThrFour & \nDaysFour \\
+T5 & \nMdeFive{} hit rate & \nThrFive & \nDaysFive \\
+\bottomrule
+\end{tabularx}}
+
+Test 1 could have seen an edge \nMdeOneRatio{} times smaller than the half-spread.
+
+\minihead{Who can trade it? Edge against cost}
+Figure~\ref{fig:edge} sets the average edge per trade against the half-spread at every snapshot. The edge stays
+below the cost for the whole auction except the last minute. Trading only the strongest tenth of imbalances after
+15:55 raises the gross edge to \nStrongGross{} bps, but those stocks quote a half-spread of \nStrongHalf, so the net
+is $\nStrongNet$ bps (\nStrongNetCi). Strong imbalances appear exactly where trading is expensive.
+
+\begin{figure}[!t]
+  \includegraphics[width=\linewidth]{fig_edge_vs_cost}
+  \caption{The imbalance edge (coloured, with 95\% band) never covers the half-spread (grey) until the last minute.
+  Each point averages, over days, the gross edge of trading in the imbalance direction at that snapshot.}
+  \label{fig:edge}
+\end{figure}
+
+At the 15:59 snapshot, and only there, the edge is \nFinalGross{} bps against a half-spread of \nFinalHalf, a net
+\nFinalNet{} bps per trade (\nFinalNetCi; $t=\nFinalT$) with a hit rate of \nFinalHit. It shrinks from \nFinalFirst{}
+in the first half of the days to \nFinalSecond{} (\nFinalSecondCi) in the second. We found it after looking, and it
+ignores the cost of hedging the index and of getting filled, so we report it as a lead for future work, not a result.
+
+\minihead{What the central limit theorem buys us}
+Test 1's interval relies on the CLT. Bounds from the lectures need weaker assumptions, at a price:
+
+{\footnotesize
+\begin{tabularx}{\linewidth}{@{}L{2.1cm} L{2.1cm} Y@{}}
+\toprule
+\textbf{Interval} & \textbf{Assumes} & \textbf{95\% interval for $\mu$ (bps)} \\
+\midrule
+t (CLT) & approx. normal day means & \nBoundTCi \\
+Chebyshev & finite variance only & \nBoundChebCi{} (\nBoundChebRatio$\times$ wider) \\
+Hoeffding & $|x|\le\nBoundRange$ bps & \nBoundHoeffCi{} (\nBoundHoeffRatio$\times$ wider) \\
+\bottomrule
+\end{tabularx}}
+
+Chebyshev, which assumes almost nothing, still excludes zero and still sits below the SDM. Hoeffding uses only the
+range, which the heavy tails make enormous, so it cannot even sign the effect.
+
+\section{Limitations}
+
+\begin{itemize}
+  \item \textbf{Two rules change at once, next to the close.} At 15:55 the near price appears and market-on-close
+  entry closes; the placebo test shows the post-15:55 gain is mostly the final minute, so time to the close and the
+  rule change are not separated.
+  \item \textbf{Association, not cause.} The imbalance may predict because the same traders move both, not because
+  traders read it.
+  \item \textbf{Days treated as independent.} Market-wide news can link consecutive days; the effects are large
+  enough that modest dependence would not change a decision.
+  \item \textbf{Costs are approximate.} The half-spread is a snapshot quote; fees, impact, index hedging and auction
+  fills are not modelled, so the true cost is higher. This strengthens Test 5 and weakens the last-minute lead.
+  \item \textbf{One exchange, anonymised period.} Dates and tickers are hidden, so results cover these 200 Nasdaq
+  stocks over about two years.
+\end{itemize}
+
+\end{document}
