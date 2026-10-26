@@ -123,6 +123,8 @@ def macros():
         "OneWelchT": num(t1["welch_buy_vs_sell"]["t"], 1),
         "OneWelchDiff": num(t1["welch_buy_vs_sell"]["diff"], 2),
         "OneVarRatio": num(t1["variance_ratio_buy_sell"], 2),
+        "OneBfP": pval(t1["brown_forsythe_buy_sell"]["p"]),
+        "OnePooledT": num(t1["pooled_buy_vs_sell"]["t"], 1),
         "OnePositiveDays": count(t1["positive_days"]),
         "OneShareOfSdm": pct(t1["primary"]["ci"][1] / tests["sdm_bps"], 0),
         "TwoChi": num(t2["primary"]["chi2"], 1),

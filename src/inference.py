@@ -69,6 +69,7 @@ def test1_direction(s, sdm, full, rng):
     welch = stats.ttest_ind(buy, sell, equal_var=False, alternative="greater")
     pooled = stats.ttest_ind(buy, sell, equal_var=True, alternative="greater")
     var_f = float(buy.var() / sell.var())
+    bf = stats.levene(buy.astype("float64"), sell.astype("float64"), center="median")
 
     every = full[full["imbalance_buy_sell_flag"] != 0]
     overlapping = naive_z(every["imbalance_buy_sell_flag"] * every["target_w"])
@@ -83,6 +84,7 @@ def test1_direction(s, sdm, full, rng):
                               "diff": float(buy.mean() - sell.mean()), "n_buy": len(buy), "n_sell": len(sell)},
         "pooled_buy_vs_sell": {"t": float(pooled.statistic), "p": float(pooled.pvalue)},
         "variance_ratio_buy_sell": var_f,
+        "brown_forsythe_buy_sell": {"w": float(bf.statistic), "p": float(bf.pvalue)},
         "positive_days": int((daily > 0).sum()),
         "daily": daily.to_numpy().tolist(),
     }
