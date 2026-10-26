@@ -241,18 +241,32 @@ def f_test(post, pre):
     return {"f": float(f), "df1": d1, "df2": d2, "p": float(p), "ci": [float(c) for c in ci]}
 
 
-def test4_variance(s):
-    pre = s.loc[s["post"] == 0, "target"].astype("float64")
-    post = s.loc[s["post"] == 1, "target"].astype("float64")
-    primary = f_test(post, pre)
-    primary["verdict"] = verdict(primary["ci"], *MATTERS_VAR_RATIO)
-    bf = stats.levene(post, pre, center="median")
-
-    by_day = s.groupby(["date_id", "post"])["target"].var().unstack()
+def day_variance_ratio(s, col="target"):
+    """t-test on each day's log ratio of post to pre variance, reported on the ratio scale."""
+    by_day = s.groupby(["date_id", "post"])[col].var().unstack()
     log_ratio = np.log(by_day[1] / by_day[0]).dropna()
     day = t_summary(log_ratio)
     day["ratio"] = float(np.exp(day["estimate"]))
     day["ratio_ci"] = [float(np.exp(c)) for c in day["ci"]]
+    day["days_lower"] = int((log_ratio < 0).sum())
+    return day
+
+
+def test4_variance(s):
+    pre = s.loc[s["post"] == 0, "target"].astype("float64")
+    post = s.loc[s["post"] == 1, "target"].astype("float64")
+    primary = f_test(post, pre)
+    bf = stats.levene(post, pre, center="median")
+
+    # Heavy tails and same-day rows make the F interval too narrow, so the verdict uses one ratio per day.
+    day = day_variance_ratio(s)
+    primary["verdict"] = verdict(day["ratio_ci"], *MATTERS_VAR_RATIO)
+
+    # Exploratory: windows holding an announcement (first imbalance at 15:50, near price at 15:55, the 16:00
+    # cross) are the most volatile, so compare with them removed from both sides alike.
+    sec = s["seconds_in_bucket"]
+    touching = [BOUNDARY - 60, BOUNDARY]
+    events = [TEST_SECONDS[0], *touching, TEST_SECONDS[-1]]
 
     w_pre = s.loc[s["post"] == 0, "target_w"].astype("float64")
     w_post = s.loc[s["post"] == 1, "target_w"].astype("float64")
@@ -263,6 +277,9 @@ def test4_variance(s):
         "brown_forsythe": {"w": float(bf.statistic), "p": float(bf.pvalue)},
         "day_level_log_ratio": day,
         "winsorised_f": f_test(w_post, w_pre),
+        "day_level_clipped": day_variance_ratio(s, "target_w"),
+        "without_boundary_windows": day_variance_ratio(s[~sec.isin(touching)]),
+        "quiet_minutes_only": day_variance_ratio(s[~sec.isin(events)]),
     }
 
 
