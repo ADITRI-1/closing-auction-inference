@@ -1,4 +1,5 @@
 import numpy as np
+import pandas as pd
 
 from .config import BOUNDARY, CHEBYSHEV_K, WINSOR
 from .load import KEYS
@@ -107,16 +108,22 @@ def panel_gaps(df, n_stocks=200, n_days=481):
     return present
 
 
+NUMERIC = ["seconds_in_bucket", "imbalance_size", "reference_price", "matched_size", "far_price", "near_price",
+           "bid_price", "bid_size", "ask_price", "ask_size", "wap", "target", "date_id"]
+ENGINEERED = ["signed_imbalance", "spread_bps", "near_gap_bps", "far_gap_bps", "target_w"]
+ONE_HOT = ["stock_id", "imbalance_buy_sell_flag", "phase"]
+
+
+def encode(df):
+    """Model-ready table: numeric and engineered columns, nominal columns one-hot encoded (sparse)."""
+    frame = df[NUMERIC + ENGINEERED + ["stock_id", "imbalance_buy_sell_flag"]].assign(
+        phase=np.where(df["post"] == 1, "post", "pre"))
+    return pd.get_dummies(frame, columns=ONE_HOT, sparse=True, dtype="uint8")
+
+
 def encoded_shape(df):
-    numeric = ["seconds_in_bucket", "imbalance_size", "reference_price", "matched_size", "far_price",
-               "near_price", "bid_price", "bid_size", "ask_price", "ask_size", "wap", "target",
-               "date_id"]
-    one_hot = {
-        "stock_id": int(df["stock_id"].nunique()),
-        "imbalance_buy_sell_flag": int(df["imbalance_buy_sell_flag"].nunique()),
-        "phase": 2,
-    }
-    engineered = ["signed_imbalance", "spread_bps", "near_gap_bps", "far_gap_bps", "target_w"]
-    cols = len(numeric) + sum(one_hot.values()) + len(engineered)
-    return {"rows": int(len(df)), "columns": cols, "numeric": len(numeric), "one_hot": one_hot,
-            "engineered": len(engineered), "cells": int(len(df)) * cols}
+    enc = encode(df)
+    one_hot = {c: int(sum(col.startswith(f"{c}_") for col in enc.columns)) for c in ONE_HOT}
+    rows, cols = enc.shape
+    return {"rows": int(rows), "columns": int(cols), "numeric": len(NUMERIC), "one_hot": one_hot,
+            "engineered": len(ENGINEERED), "cells": int(rows) * int(cols)}
