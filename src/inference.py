@@ -211,6 +211,12 @@ def test3_boundary(s):
     sign = stats.binomtest(int((delta > 0).sum()), len(delta), 0.5)
     wilcoxon = stats.wilcoxon(delta)
 
+    # Pooling five snapshots could add between-snapshot differences; removing each snapshot's mean rules that out.
+    centred = s.copy()
+    for c in ["signed_imbalance", "target"]:
+        centred[c] = s[c] - s.groupby(["date_id", "seconds_in_bucket"])[c].transform("mean")
+    centred_ic = daily_ic(centred).dropna()
+
     return {
         "primary": primary,
         "ic_pre": t_summary(ic["pre"]),
@@ -219,6 +225,9 @@ def test3_boundary(s):
         "fisher_z": {"z": fz, "p": fz_p},
         "sign_test": {"positive_days": int((delta > 0).sum()), "n": len(delta), "p": float(sign.pvalue)},
         "wilcoxon": {"w": float(wilcoxon.statistic), "p": float(wilcoxon.pvalue)},
+        "delta_skew": float(stats.skew(delta)),
+        "delta_kurtosis": float(stats.kurtosis(delta)),
+        "centred": t_summary(centred_ic["post"] - centred_ic["pre"]),
         "daily_pre": ic["pre"].tolist(),
         "daily_post": ic["post"].tolist(),
     }

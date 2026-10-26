@@ -52,7 +52,8 @@ def snapshot_ic(frame):
 
 
 def placebo_boundaries(df):
-    ic = snapshot_ic(df[df["seconds_in_bucket"].isin(TEST_SECONDS)])
+    minutes = df[df["seconds_in_bucket"].isin(TEST_SECONDS)]
+    ic = snapshot_ic(minutes)
     jumps = {}
     for b in TEST_SECONDS[1:]:
         jumps[int(b)] = t_summary((ic[b] - ic[b - 60]).dropna())
@@ -64,8 +65,12 @@ def placebo_boundaries(df):
 
     pre = ic[[c for c in ic.columns if c < BOUNDARY]].mean(axis=1)
     post = ic[[c for c in ic.columns if c >= BOUNDARY]].mean(axis=1)
-    post_early = ic[[c for c in ic.columns if BOUNDARY <= c < TEST_SECONDS[-1]]].mean(axis=1)
-    sensitivity = {"with_last_minute": t_summary(post - pre), "without_last_minute": t_summary(post_early - pre)}
+    # Same daily IC as Test 3, with and without the last minute; the per-snapshot average is kept for comparison.
+    pooled = daily_ic(minutes).dropna()
+    early = daily_ic(minutes[minutes["seconds_in_bucket"] < TEST_SECONDS[-1]]).dropna()
+    sensitivity = {"with_last_minute": t_summary(pooled["post"] - pooled["pre"]),
+                   "without_last_minute": t_summary(early["post"] - early["pre"]),
+                   "per_snapshot": t_summary(post - pre)}
 
     profile = snapshot_ic(df)
     n = profile.notna().sum()
