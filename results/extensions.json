@@ -495,6 +495,16 @@
       "mde": 0.035645194455986205,
       "days_for_threshold": 1
     },
+    "T2": {
+      "unit": "up-share gap",
+      "sd": 0.11160607655625122,
+      "n": 481,
+      "two_sided": false,
+      "threshold": 0.09999884907306916,
+      "observed": 0.01843953906975962,
+      "mde": 0.012653170947852165,
+      "days_for_threshold": 8
+    },
     "T3": {
       "unit": "IC",
       "sd": 0.07626633098805889,

@@ -20,11 +20,14 @@ def power_table(tests, sdm):
     t = tests["tests"]
     t1_daily = np.asarray(t["T1"]["daily"])
     t3_delta = np.asarray(t["T3"]["daily_post"]) - np.asarray(t["T3"]["daily_pre"])
+    t2 = t["T2"]["day_level"]
     t4 = t["T4"]["day_level_log_ratio"]
     t5 = t["T5"]["day_level"]
     rows = {
         "T1": {"unit": "bps per trade", "sd": float(t1_daily.std(ddof=1)), "n": len(t1_daily), "two_sided": False,
                "threshold": sdm, "observed": t["T1"]["primary"]["estimate"]},
+        "T2": {"unit": "up-share gap", "sd": t2["se"] * np.sqrt(t2["n"]), "n": t2["n"], "two_sided": False,
+               "threshold": t["T2"]["gap_threshold"], "observed": t2["estimate"]},
         "T3": {"unit": "IC", "sd": float(t3_delta.std(ddof=1)), "n": len(t3_delta), "two_sided": True,
                "threshold": MATTERS_DELTA_IC, "observed": t["T3"]["primary"]["estimate"]},
         "T4": {"unit": "log variance ratio", "sd": t4["se"] * np.sqrt(t4["n"]), "n": t4["n"], "two_sided": True,

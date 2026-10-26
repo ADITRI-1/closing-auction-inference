@@ -295,7 +295,19 @@ def test5_hit_rate(s):
     half = zc * np.sqrt(p_hat * (1 - p_hat) / n)
     ci = [p_hat - half, p_hat + half]
     exact = stats.binomtest(k, n, 0.5, alternative="greater")
-    daily = pd.Series(win, index=flagged.index).groupby(flagged["date_id"]).mean()
+    days = flagged["date_id"]
+    daily = pd.Series(win, index=flagged.index).groupby(days).mean()
+
+    # A hit rate alone cannot show a loss: check the mean net result per day, and the win and loss sizes.
+    net64 = net.astype("float64")
+    daily_net = net64.groupby(days).mean()
+    mean_win, mean_loss = float(net64[net64 > 0].mean()), float(net64[net64 <= 0].mean())
+
+    # No-information baseline: the same trades and costs with the side chosen by a fair coin.
+    y = flagged["target"].astype("float64")
+    cost = flagged["half_spread_bps"].astype("float64")
+    random_win = 0.5 * (y > cost) + 0.5 * (-y > cost)
+    lift = daily - random_win.groupby(days).mean()
     return {
         "primary": {"n": n, "wins": k, "estimate": float(p_hat), "z": float(z), "p": float(stats.norm.sf(z)),
                     "ci": [float(c) for c in ci], "verdict": verdict(ci, MATTERS_HIT_RATE)},
@@ -303,6 +315,13 @@ def test5_hit_rate(s):
         "mean_net_bps": float(net.mean()),
         "exact_binomial_p": float(exact.pvalue),
         "day_level": t_summary(daily, alternative="greater", null=0.5),
+        "daily_net": {**t_summary(daily_net), "positive_days": int((daily_net > 0).sum())},
+        "mean_win_bps": mean_win,
+        "mean_loss_bps": mean_loss,
+        "breakeven_hit_rate": -mean_loss / (mean_win - mean_loss),
+        "mean_half_spread_bps": float(cost.mean()),
+        "random_side_hit_rate": float(random_win.mean()),
+        "lift_over_random": t_summary(lift),
     }
 
 

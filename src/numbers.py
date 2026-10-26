@@ -37,6 +37,15 @@ def ci(pair, digits=2):
     return f"{pair[0]:.{digits}f} to {pair[1]:.{digits}f}"
 
 
+def ci_math(pair, digits=2):
+    """Interval whose ends may be negative, set in math mode so they print a minus sign, not a hyphen."""
+    return f"${pair[0]:.{digits}f}$ to ${pair[1]:.{digits}f}$"
+
+
+def days(x):
+    return "$<2$" if x < 2 else count(x)
+
+
 def macros():
     prep, eda, tests, bounds = load("prep"), load("eda"), load("tests"), load("bounds")
     ext = load("extensions")
@@ -214,6 +223,19 @@ def macros():
         "FiveNet": num(t5["mean_net_bps"], 2),
         "FiveThreshold": pct(MATTERS_HIT_RATE, 0),
         "FiveDayT": num(t5["day_level"]["t"], 1),
+        "FiveDayDf": count(t5["day_level"]["df"]),
+        "FiveDayEst": pct(t5["day_level"]["estimate"]),
+        "FiveDayCi": ci([100 * c for c in t5["day_level"]["ci"]], 1),
+        "FiveNetDay": num(t5["daily_net"]["estimate"], 2),
+        "FiveNetDayCi": ci_math(t5["daily_net"]["ci"], 2),
+        "FiveNetPositiveDays": count(t5["daily_net"]["positive_days"]),
+        "FiveWin": num(t5["mean_win_bps"], 1),
+        "FiveLoss": num(-t5["mean_loss_bps"], 1),
+        "FiveBreakeven": pct(t5["breakeven_hit_rate"], 0),
+        "FiveHalfSpread": num(t5["mean_half_spread_bps"], 2),
+        "FiveRandom": pct(t5["random_side_hit_rate"]),
+        "FiveLift": num(100 * t5["lift_over_random"]["estimate"], 1),
+        "FiveLiftCi": ci([100 * c for c in t5["lift_over_random"]["ci"]], 1),
         "BoundT": num(bounds["intervals"]["t"]["half_width"], 3),
         "BoundCheb": num(bounds["intervals"]["chebyshev"]["half_width"], 3),
         "BoundHoeff": num(bounds["intervals"]["hoeffding"]["half_width"], 2),
@@ -221,7 +243,7 @@ def macros():
         "BoundHoeffRatio": count(round(bounds["intervals"]["hoeffding"]["width_vs_t"])),
         "BoundTCi": ci([bounds["intervals"]["t"]["low"], bounds["intervals"]["t"]["high"]], 2),
         "BoundChebCi": ci([bounds["intervals"]["chebyshev"]["low"], bounds["intervals"]["chebyshev"]["high"]], 2),
-        "BoundHoeffCi": ci([bounds["intervals"]["hoeffding"]["low"], bounds["intervals"]["hoeffding"]["high"]], 1),
+        "BoundHoeffCi": ci_math([bounds["intervals"]["hoeffding"]["low"], bounds["intervals"]["hoeffding"]["high"]], 1),
         "BoundRange": num(bounds["bound"], 1),
     }
     m.update(extension_macros(ext, tests))
@@ -279,7 +301,7 @@ def extension_macros(ext, tests):
         "StrongGross": num(sp["gross"], 2),
         "StrongHalf": num(sp["half_spread"], 2),
         "StrongNet": num(sp["estimate"], 2),
-        "StrongNetCi": ci(sp["ci"], 2),
+        "StrongNetCi": ci_math(sp["ci"], 2),
         "BreakPre": num(be["pre"]["gross"], 2),
         "BreakPost": num(be["post"]["gross"], 2),
         "TFitDf": num(fits["student_t"]["df"], 1),
@@ -303,9 +325,10 @@ def extension_macros(ext, tests):
         "CmTop": count(cm["top_overlap"]),
         "CmMemory": pct(cm["counters"] / cm["items"], 0),
     }
-    for key, word, digits in [("T1", "One", 2), ("T3", "Three", 2), ("T4", "Four", 3), ("T5", "Five", 2)]:
+    for key, word, digits in [("T1", "One", 2), ("T2", "Two", 2), ("T3", "Three", 2), ("T4", "Four", 3),
+                              ("T5", "Five", 2)]:
         m[f"Mde{word}"] = num(pw[key]["mde"], 3)
-        m[f"Days{word}"] = count(pw[key]["days_for_threshold"])
+        m[f"Days{word}"] = days(pw[key]["days_for_threshold"])
         m[f"Thr{word}"] = num(pw[key]["threshold"], digits)
     m["MdeOneRatio"] = count(round(pw["T1"]["threshold"] / pw["T1"]["mde"]))
     rows = []
