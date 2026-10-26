@@ -94,9 +94,40 @@ def cramers_v(chi2, n, shape):
     return float(np.sqrt(chi2 / (n * (min(shape) - 1))))
 
 
-def test2_independence(df, s):
-    first = df[(df["seconds_in_bucket"] == T2_SECOND) & (df["target"] != 0)]
-    table = pd.crosstab(first["imbalance_buy_sell_flag"], first["target"] > 0)
+def side_direction_v(frame):
+    table = pd.crosstab(frame["imbalance_buy_sell_flag"], frame["target"] > 0)
+    chi2 = stats.chi2_contingency(table, correction=False)[0]
+    return cramers_v(chi2, int(table.to_numpy().sum()), table.shape)
+
+
+def up_share_gap(frame):
+    """Per day: share of up moves after a buy imbalance minus the share after a sell imbalance."""
+    return frame.assign(up=frame["target"] > 0).groupby("date_id").apply(
+        lambda d: d.loc[d["imbalance_buy_sell_flag"] == 1, "up"].mean()
+        - d.loc[d["imbalance_buy_sell_flag"] == -1, "up"].mean(), include_groups=False).dropna()
+
+
+def bootstrap_v(frame, rng):
+    """Percentile interval for Cramer's V, resampling whole days. V >= 0, so the upper end is conservative."""
+    _, day = np.unique(frame["date_id"].to_numpy(), return_inverse=True)
+    side = frame["imbalance_buy_sell_flag"].to_numpy().astype(int) + 1
+    up = (frame["target"] > 0).to_numpy().astype(int)
+    counts = np.zeros((day.max() + 1, 3, 2))
+    np.add.at(counts, (day, side, up), 1)
+    vs = np.empty(N_BOOT)
+    for i in range(N_BOOT):
+        t = counts[rng.integers(0, len(counts), len(counts))].sum(axis=0)
+        t = t[t.sum(axis=1) > 0]
+        e = t.sum(axis=1, keepdims=True) * t.sum(axis=0, keepdims=True) / t.sum()
+        vs[i] = cramers_v(((t - e) ** 2 / e).sum(), t.sum(), t.shape)
+    return [float(np.percentile(vs, 2.5)), float(np.percentile(vs, 97.5))]
+
+
+def test2_independence(df, s, rng):
+    at_second = df["seconds_in_bucket"] == T2_SECOND
+    zero_moves = int((at_second & (df["target"] == 0)).sum())
+    first = df[at_second & (df["target"] != 0)]
+    table =pd.crosstab(first["imbalance_buy_sell_flag"], first["target"] > 0)
     chi2, p, dof, expected = stats.chi2_contingency(table, correction=False)
     g, g_p, _, _ = stats.chi2_contingency(table, correction=False, lambda_="log-likelihood")
     n = int(table.to_numpy().sum())
@@ -112,24 +143,35 @@ def test2_independence(df, s):
     diff = p_buy - p_sell
     zc = stats.norm.ppf(1 - ALPHA / 2)
 
-    daily = first.assign(up=up).groupby("date_id").apply(
-        lambda d: d.loc[d["imbalance_buy_sell_flag"] == 1, "up"].mean()
-        - d.loc[d["imbalance_buy_sell_flag"] == -1, "up"].mean(), include_groups=False)
+    # With buy/sell and up/down shares near one half, V for buy vs sell equals the up-share gap times this
+    # factor (about 1), so the V threshold converts to a threshold on the gap.
+    w = n_buy / (n_buy + n_sell)
+    v_per_gap = float(np.sqrt(w * (1 - w) / (pooled * (1 - pooled))))
+    gap_threshold = MATTERS_CRAMER_V / v_per_gap
+    day = t_summary(up_share_gap(first), alternative="greater")
 
     rows = s[s["target"] != 0]
     all_table = pd.crosstab(rows["imbalance_buy_sell_flag"], rows["target"] > 0)
     all_chi2, all_p, _, _ = stats.chi2_contingency(all_table, correction=False)
+    by_minute = {}
+    for sec, part in rows.groupby("seconds_in_bucket"):
+        gap = t_summary(up_share_gap(part))
+        by_minute[int(sec)] = {"v": side_direction_v(part), "gap": gap["estimate"], "gap_ci": gap["ci"]}
 
     return {
         "primary": {"chi2": float(chi2), "df": int(dof), "p": float(p), "n": n, "cramers_v": v,
-                    "min_expected": float(expected.min()),
-                    "verdict": "matters" if v >= MATTERS_CRAMER_V else "does not matter"},
+                    "min_expected": float(expected.min()), "verdict": verdict(day["ci"], gap_threshold)},
+        "zero_moves": zero_moves,
+        "v_per_gap": v_per_gap,
+        "gap_threshold": float(gap_threshold),
+        "bootstrap_v_ci": bootstrap_v(first, rng),
+        "by_minute": by_minute,
         "table": {str(k): {str(c): int(x) for c, x in row.items()} for k, row in table.iterrows()},
         "up_share": {"buy": float(p_buy), "sell": float(p_sell), "none": float(up[first["imbalance_buy_sell_flag"] == 0].mean())},
         "two_proportion": {"z": float(z), "p": float(stats.norm.sf(z)), "diff": float(diff),
                            "ci": [float(diff - zc * se), float(diff + zc * se)]},
         "g_test": {"g": float(g), "p": float(g_p)},
-        "day_level": t_summary(daily.dropna(), alternative="greater"),
+        "day_level": day,
         "all_rows": {"chi2": float(all_chi2), "p": float(all_p), "n": int(all_table.to_numpy().sum()),
                      "cramers_v": cramers_v(all_chi2, int(all_table.to_numpy().sum()), all_table.shape)},
     }
@@ -252,7 +294,7 @@ def run_tests(df):
     sdm = smallest_difference(df)
     results = {
         "T1": test1_direction(s, sdm, df, rng),
-        "T2": test2_independence(df, s),
+        "T2": test2_independence(df, s, rng),
         "T3": test3_boundary(s),
         "T4": test4_variance(s),
         "T5": test5_hit_rate(s),
