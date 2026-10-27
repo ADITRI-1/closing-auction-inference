@@ -80,11 +80,12 @@ Code & github.com/ADITRI-1/closing-auction-inference (code and README) \\
 \toprule
 \textbf{\#} & \textbf{Name} & \textbf{Roll no.} & \textbf{Institute email} & \textbf{Contribution} \\
 \midrule
-1 & Arush Gumber & 2023136 & arush23136@iiitd.ac.in & Problem statement, Tests 3 to 5, code (4, 5) \\
-2 & Aditri Jain & 2024027 & aditri24027@iiitd.ac.in & Dataset and size check (1) \\
-3 & Arnesh Batra & 2023129 & arnesh23129@iiitd.ac.in & Preparation, before and after (2, 3) \\
-4 & Anika Goyal & 2024072 & anika24072@iiitd.ac.in & EDA, Tests 1 and 2 (4, 5) \\
-5 & Akshainie Rawat & 2024054 & akshainie24054@iiitd.ac.in & Limitations, README, report (5, 6) \\
+1 & Arush Gumber & 2023136 & arush23136@iiitd.ac.in & Problem statement and idea, Tests 1 and 2, code (4, 5) \\
+2 & Aditri Jain & 2024027 & aditri24027@iiitd.ac.in & Problem statement, preparation, EDA, Tests 3 and 4, code
+  and repository (1--5) \\
+3 & Arnesh Batra & 2023129 & arnesh23129@iiitd.ac.in & Test 5, report: limitations (5, 6) \\
+4 & Anika Goyal & 2024072 & anika24072@iiitd.ac.in & Report: README and reproducibility check \\
+5 & Akshainie Rawat & 2024054 & akshainie24054@iiitd.ac.in & Report: compilation, layout and page check \\
 \bottomrule
 \end{tabularx}}
 \vspace{12pt}
@@ -694,12 +695,19 @@ range, which the heavy tails make enormous, so it cannot even sign the effect.
 
 \begin{itemize}
   \item \textbf{Two rules change at once, next to the close.} At 15:55 the near price appears and market-on-close
-  entry closes; the placebo test shows the post-15:55 gain is mostly the final minute, so time to the close and the
-  rule change are not separated.
+  entry closes; the placebo test shows the post-15:55 gain is mostly the final minute, and without it the change is
+  inconclusive, so time to the close and the rule change are not separated.
   \item \textbf{Association, not cause.} The imbalance may predict because the same traders move both, not because
   traders read it.
-  \item \textbf{Days treated as independent.} Market-wide news can link consecutive days; the effects are large
-  enough that modest dependence would not change a decision.
+  \item \textbf{Rows dropped and rows unused.} \nEmptyRows{} rows with no book were dropped and \nFarOutliers{}
+  impossible far prices set to missing. To avoid overlapping targets the tests use one snapshot a minute, 10 of every
+  55, and Test 2 only the first; results for the other snapshots are inferred, not tested.
+  \item \textbf{Rows are not independent.} Tests 2, 4 and 5 run the syllabus test on rows from the same days, so
+  their p-values may be too small; we rely on their day-level checks, which agree. Days themselves are treated as
+  independent, although market-wide news can link consecutive days; the effects are large enough that modest
+  dependence would not change a decision.
+  \item \textbf{Some findings are exploratory.} The last-minute lead, the per-minute pattern in Test 2 and the
+  announcement windows in Test 4 were found after looking at the data, so they need confirming on new data.
   \item \textbf{Costs are approximate.} The half-spread is a snapshot quote; fees, impact, index hedging and auction
   fills are not modelled, so the true cost is higher. This strengthens Test 5 and weakens the last-minute lead.
   \item \textbf{One exchange, anonymised period.} Dates and tickers are hidden, so results cover these 200 Nasdaq

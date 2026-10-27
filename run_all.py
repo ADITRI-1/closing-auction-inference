@@ -24,6 +24,10 @@ def main():
     del raw
     after = snapshot(df)
     df = add_features(df)
+    per_stock_day = df.groupby(["stock_id", "date_id"]).size()
+    assert (per_stock_day == df["seconds_in_bucket"].nunique()).all(), \
+        "every stock-day needs all snapshots, or the 60 s shift in features.py pairs the wrong rows"
+    assert df[["signed_imbalance", "target", "half_spread_bps"]].notna().all().all(), "missing values in test inputs"
     PROCESSED.parent.mkdir(parents=True, exist_ok=True)
     df.to_parquet(PROCESSED)
 

@@ -703,12 +703,12 @@
       "pre": {
         "gross": 0.2959623475131392,
         "median_half_spread": 2.209999999999712,
-        "share_cheaper": 0.0041904406950884305
+        "share_below_mean_edge": 0.0041904406950884305
       },
       "post": {
         "gross": 0.7054323179777782,
         "median_half_spread": 1.5850803664256756,
-        "share_cheaper": 0.14973807721423163
+        "share_below_mean_edge": 0.14973807721423163
       }
     },
     "strongest_post": {

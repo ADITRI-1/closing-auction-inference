@@ -29,8 +29,10 @@ def breakeven(flagged):
     out = {}
     for post, name in [(0, "pre"), (1, "post")]:
         g = flagged[flagged["post"] == post]
+        # Share of trades whose own cost is below the phase's average edge; the per-trade comparison of each
+        # trade's edge with its own cost is Test 5's hit rate.
         out[name] = {"gross": float(g["gross"].mean()), "median_half_spread": float(g["half_spread_bps"].median()),
-                     "share_cheaper": float((g["half_spread_bps"] < g["gross"].mean()).mean())}
+                     "share_below_mean_edge": float((g["half_spread_bps"] < g["gross"].mean()).mean())}
     return out
 
 
