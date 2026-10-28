@@ -270,17 +270,28 @@ stocks within ten seconds.
 
 \minihead{Our problem statements}
 \noindent\fbox{\begin{minipage}{\dimexpr\linewidth-2\fboxsep-2\fboxrule\relax}
-\textbf{P1 (primary).} Does the published imbalance predict the stock's next-minute move against the index, and
-is that edge larger than the half-spread a trader pays to act on it?
+Overall question: is the closing-auction imbalance already in the price?
 
 \smallskip
-\textbf{P2.} Does the 15:55 rule change make the next minute more predictable from the imbalance, and less
-volatile?
+\textbf{PS1 (information).} Does the published imbalance carry information about the stock's next-minute move
+against the index? \emph{(Tests 1 and 2)}
+
+\textbf{PS2 (timing).} Does the 15:55 rule change make the imbalance more informative? \emph{(Test 3)}
+
+\textbf{PS3 (risk).} Does the 15:55 rule change make the next minute less volatile? \emph{(Test 4)}
+
+\textbf{PS4 (tradability).} Is that information worth money to an outsider who pays the half-spread?
+\emph{(Tests 5 and 1)}
+
+\smallskip
+\textbf{How they link.} PS1 asks whether the signal exists. PS2 and PS3 ask whether 15:55 raises the signal and
+lowers the noise. PS4 asks whether, together, this leaves money for an outsider; if it does not, the imbalance is
+already in the price.
 \end{minipage}}
 
 \field{How they are novel:}{the basic questions read one column at a time. Ours ask whether public information is
 already in the price, which needs an engineered signal, a day-level unit that respects shared index moves, and an
-economic yardstick (the spread). P2 compares the same stocks on the same day before and after a rule change. The
+economic yardstick (the spread). PS2 and PS3 compare the same stocks on the same day before and after a rule change. The
 public work on this dataset that we found fits predictive models; it does not test pricing, account for the overlap
 or use the 15:55 boundary.}
 
@@ -313,7 +324,7 @@ p-values across the five. Because the row-level p-values of Tests 2, 4 and 5 may
 each test's day-level p-value; it gives the same decision for \nHolmDayAgree{} of the 5 tests (Test 2, the closest,
 at \nHolmDayTwo).}
 
-\subsection*{Test 1 (P1): does the imbalance side predict the move?}
+\subsection*{Test 1 (PS1, PS4): does the imbalance side predict the move?}
 
 \tpart{a}{Hypotheses, written before running the test}
 {\small
@@ -366,9 +377,9 @@ Decision & reject $H_0$ \\
 
 The imbalance side predicts the next minute, on \nOnePositiveDays{} of \nDays{} days. The edge does not matter: even
 the top of its interval is \nOneShareOfSdm{} of the half-spread, so the information is in the price to within trading
-costs.
+costs. For PS1 the imbalance does carry information; for PS4 the edge is too small to pay for the trade.
 
-\subsection*{Test 2 (P1): is the direction of the move independent of the side?}
+\subsection*{Test 2 (PS1): is the direction of the move independent of the side?}
 
 \tpart{a}{Hypotheses, written before running the test}
 {\small
@@ -388,7 +399,7 @@ the first snapshot of each stock-day, at 15:50, fixed in advance: it is the firs
 stock appears once per day (\nTwoN{} rows; \nTwoZeroRows{} snapshots with no move, neither up nor down, are left
 out). $V=0.10$ is the conventional floor for a small association. Buy and sell imbalances, and up and down moves, are
 each close to half here, so $V$ for buy against sell equals the gap in up-share: $V=0.10$ is a gap of
-\nTwoGapThreshold{} percentage points. P1 is about buy against sell, so the verdict applies the threshold to that gap.
+\nTwoGapThreshold{} percentage points. PS1 is about buy against sell, so the verdict applies the threshold to that gap.
 The full $3\times2$ table gives the same answer on its own terms: its $V$ (\nTwoV) is close to the buy-against-sell
 value (\nTwoPhi), and its own interval (bootstrap below) also lies wholly below 0.10.
 
@@ -427,12 +438,13 @@ Decision & reject $H_0$ \\
 \bottomrule
 \end{tabularx}}
 
-At 15:50 the side and the direction are dependent, in the order P1 predicts (buy, then balanced, then sell), but
+At 15:50 the side and the direction are dependent, in the order PS1 expects (buy, then balanced, then sell), but
 weakly: the whole interval for the gap lies below \nTwoGapThreshold{} points, so the association does not matter. Only
 in the last minute does it reach a size that matters (gap \nTwoGapLast{} points, 95\% CI \nTwoGapLastCi), an
-exploratory finding that agrees with the placebo test below.
+exploratory finding that agrees with the placebo test below. For PS1, the side carries the direction of the move,
+but only weakly at 15:50.
 
-\subsection*{Test 3 (P2): does 15:55 change how predictable the move is?}
+\subsection*{Test 3 (PS2): does 15:55 change how predictable the move is?}
 
 \tpart{a}{Hypotheses, written before running the test}
 {\small
@@ -488,9 +500,10 @@ Decision & reject $H_0$ \\
 \end{tabularx}}
 
 The imbalance predicts the next minute \nThreeRatio{} times better after 15:55, and the whole interval lies beyond
-the threshold, so the change matters. We had predicted, in writing, a fall. The placebo test below shows where the rise really comes from.
+the threshold, so the change matters. We had predicted, in writing, a fall. For PS2 the answer is yes: the
+imbalance is more informative after 15:55. The placebo test below shows where the rise really comes from.
 
-\subsection*{Test 4 (P2): is the next minute less volatile after 15:55?}
+\subsection*{Test 4 (PS3): is the next minute less volatile after 15:55?}
 
 \tpart{a}{Hypotheses, written before running the test}
 {\small
@@ -545,9 +558,9 @@ Decision & reject $H_0$ \\
 After 15:55 the variance of the next minute is about \nFourDrop{} lower (standard deviation \nFourSdDrop{} lower), or
 about \nFourQuietDrop{} lower using only minutes without an announcement. The change matters: the whole day-level
 interval lies below \nFourLow, as it does in every comparison that treats both sides alike, and the F-test,
-Brown-Forsythe and day-level ratio all agree.
+Brown-Forsythe and day-level ratio all agree. For PS3 the answer is yes: the next minute is calmer after 15:55.
 
-\subsection*{Test 5 (P1): can an outsider trade the imbalance?}
+\subsection*{Test 5 (PS4): can an outsider trade the imbalance?}
 
 \tpart{a}{Hypotheses, written before running the test}
 {\small
@@ -600,7 +613,8 @@ Decision & fail to reject $H_0$ \\
 
 Before costs the rule wins slightly more than half the time; after paying the half-spread it wins only \nFiveEst.
 The whole interval lies far below \nFiveThreshold, so the rule does not matter as a trade, and the average trade nets
-$\nFiveNetDay$ bps.
+$\nFiveNetDay$ bps. For PS4 the answer is no: an outsider who pays the spread loses, so the imbalance is already in
+the price.
 
 \subsection*{Stress tests, with criteria fixed before they ran}
 
