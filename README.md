@@ -4,8 +4,16 @@ CSE558 Data Science, Monsoon 2026, midterm project. Group: Closing Cross.
 
 Every Nasdaq closing auction publishes its order imbalance in the last ten minutes of trading. At 15:55 two rules
 change at once: indicative clearing prices start being published, and new market-on-close orders stop being accepted.
-We test whether the published imbalance predicts a stock's next-minute move against the index, whether that edge is
-larger than the bid-ask spread, and whether the 15:55 rule change makes the move more predictable and less volatile.
+We ask whether the closing-auction imbalance is already in the price, through four linked problem statements:
+
+- **PS1 (information):** does the published imbalance carry information about the stock's next-minute move against
+  the index? (Tests 1 and 2)
+- **PS2 (timing):** does the 15:55 rule change make the imbalance more informative? (Test 3)
+- **PS3 (risk):** does the 15:55 rule change make the next minute less volatile? (Test 4)
+- **PS4 (tradability):** is that information worth money to an outsider who pays the half-spread? (Tests 5 and 1)
+
+PS1 asks whether the signal exists, PS2 and PS3 whether 15:55 raises the signal and lowers the noise, and PS4 whether,
+together, this leaves money for an outsider; if it does not, the imbalance is already in the price.
 
 The report is in `report/main.tex`; every result in it is read from `results/numbers.tex`, which the code generates.
 
@@ -93,16 +101,16 @@ stock-day is missing snapshots, since the 60-second returns depend on a complete
 
 ## Results in one line each
 
-1. The imbalance side predicts the next minute on 458 of 481 days (+0.47 bps per trade), but the edge is about a
+1. (PS1, PS4) The imbalance side predicts the next minute on 458 of 481 days (+0.47 bps per trade), but the edge is about a
    quarter of the median half-spread, so it does not matter for trading.
-2. At 15:50, side and direction are dependent but weakly: the up-share gap between buy and sell imbalances is 1.8
+2. (PS1) At 15:50, side and direction are dependent but weakly: the up-share gap between buy and sell imbalances is 1.8
    points (95% CI 0.8 to 2.8), far below the 10-point threshold.
-3. After 15:55 the imbalance predicts the next minute about 2.5 times better (IC 0.032 to 0.080), in all 11
+3. (PS2) After 15:55 the imbalance predicts the next minute about 2.5 times better (IC 0.032 to 0.080), in all 11
    subgroups tested.
-4. After 15:55 the variance of the next minute is about 23% lower, or about 16% using only minutes without an
+4. (PS3) After 15:55 the variance of the next minute is about 23% lower, or about 16% using only minutes without an
    announcement.
-5. Trading the imbalance and paying the half-spread wins 39% of trades and loses 2.39 bps per trade on average,
+5. (PS4) Trading the imbalance and paying the half-spread wins 39% of trades and loses 2.39 bps per trade on average,
    with a loss on every one of the 481 days.
-6. Placebo boundaries show most of the 15:55 gain comes from the final minute, whose window contains the 16:00
+6. (PS2) Placebo boundaries show most of the 15:55 gain comes from the final minute, whose window contains the 16:00
    closing cross; without it the change is inconclusive. That minute is also the only place the edge clears the
    half-spread, an exploratory lead.
